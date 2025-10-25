@@ -70,7 +70,17 @@ export class CountriesService {
     let orderByClause: any = {};
     if (sort) {
       const [field, direction] = sort.split('_');
-      orderByClause[field] = direction.toLowerCase();
+
+      const fieldMapping: Record<string, string> = {
+        gdp: 'estimated_gdp',
+        name: 'name',
+        population: 'population',
+        exchange_rate: 'exchange_rate',
+      };
+
+      const mappedField = fieldMapping[field] || field;
+
+      orderByClause[mappedField] = direction.toLowerCase();
     }
 
     const countries = await this.prisma.country.findMany({
