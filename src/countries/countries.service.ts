@@ -159,29 +159,33 @@ export class CountriesService {
 
     // Now update the database with processed countries as a batch
     try {
-      await this.prisma.$transaction(
-        async (prisma) => {
-          // Insert new countries
-          for (const countryData of allProcessedCountries) {
-            await prisma.country.upsert({
-              where: { name: countryData.name },
-              update: { ...countryData },
-              create: { ...countryData },
-            });
-          }
+      const startTime = Date.now();
+      const chunkSize = 50;
+      for (let i = 0; i < allProcessedCountries.length; i += chunkSize) {
+        const chunk = allProcessedCountries.slice(i, i + chunkSize);
+        const upsertPromises = chunk.map((country) =>
+          this.prisma.country.upsert({
+            where: { name: country.name },
+            update: { ...country },
+            create: { ...country },
+          }),
+        );
 
-          // update the metadata last_refreshed_at
-          const now = new Date();
-          await prisma.metadata.upsert({
-            where: { id: 1 },
-            create: { last_refreshed_at: now },
-            update: { last_refreshed_at: now },
-          });
-        },
-        {
-          timeout: 60000,
-          maxWait: 60000,
-        },
+        await this.prisma.$transaction(() => Promise.all(upsertPromises), {
+          timeout: 10000,
+        });
+      }
+
+      // Update metadata
+      await this.prisma.metadata.upsert({
+        where: { id: 1 },
+        update: { last_refreshed_at: new Date() },
+        create: { id: 1, last_refreshed_at: new Date() },
+      });
+
+      const endTime = Date.now();
+      console.log(
+        `Database update completed in ${(endTime - startTime) / 1000} seconds`,
       );
     } catch (error: any) {
       throw new InternalServerErrorException({
