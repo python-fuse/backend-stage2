@@ -28,6 +28,8 @@ export class CountriesService {
 
   async refreshCountries() {
     const allProcessedCountries: Country[] = [];
+
+    // Handle fetching countries and exchange rates
     try {
       const countriesApiResponse = await axios.get(this.countriesApiUrl!);
       const countriesData = countriesApiResponse.data as CountryFromAPI[];
@@ -69,10 +71,35 @@ export class CountriesService {
 
         allProcessedCountries.push(newCountryEntry as Country);
       }
-
-      return allProcessedCountries;
     } catch (error: any) {
       throw new Error(`Failed to refresh countries: ${error.message}`);
     }
+
+    // Now update the database with processed countries as a batch
+    try {
+      await this.prisma.$transaction(async (prisma) => {
+        // Insert new countries
+        for (const countryData of allProcessedCountries) {
+          await prisma.country.upsert({
+            where: { name: countryData.name },
+            update: { ...countryData },
+            create: { ...countryData },
+          });
+        }
+
+        // update the metadata last_refreshed_at
+        const now = new Date();
+        await prisma.metadata.update({
+          where: { id: 1 },
+          data: { last_refreshed_at: now },
+        });
+      });
+    } catch (error: any) {
+      throw new Error(`Database update failed: ${error.message}`);
+    }
+
+    // now try generate an image summary for top five countries
+
+    return { message: 'Countries refreshed successfully' };
   }
 }

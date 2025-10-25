@@ -8,9 +8,14 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Metadata {
+  id                Int      @id @default(1)
+  last_refreshed_at DateTime
+}
+
 model Country {
   id              Int      @id @default(autoincrement())
-  name            String
+  name            String   @unique
   capital         String?
   region          String?
   population      BigInt
