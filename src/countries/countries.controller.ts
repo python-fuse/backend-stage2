@@ -38,8 +38,13 @@ export class CountriesController {
   }
 
   @Get(':name')
-  getCountryByName(@Param('name') name: string) {
-    return this.countriesService.getCountryByName(name);
+  async getCountryByName(@Param('name') name: string) {
+    const country = await this.countriesService.getCountryByName(name);
+    return await JSON.parse(
+      JSON.stringify(country, (_key, value) =>
+        typeof value === 'bigint' ? Number(value) : value,
+      ),
+    );
   }
 
   @Get()
