@@ -6,8 +6,8 @@ import axios from 'axios';
 import { CountryFromAPI } from 'src/utils/definitions';
 import { Country } from 'prisma/generated/client';
 import { CountryCreateInput } from 'prisma/generated/models';
-import e from 'express';
 import { generateMultiplier } from 'src/utils';
+import { ImageService } from 'src/image.service';
 
 @Injectable()
 export class CountriesService {
@@ -17,6 +17,7 @@ export class CountriesService {
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
+    private imageService: ImageService,
   ) {
     this.countriesApiUrl = this.config.get<string>('COUNTRIES_API_URL');
     this.ratesApiUrl = this.config.get<string>('RATES_API_URL');
@@ -24,6 +25,10 @@ export class CountriesService {
     if (!this.countriesApiUrl || !this.ratesApiUrl) {
       throw new Error('API URLs are not defined');
     }
+  }
+
+  getCountries() {
+    return this.prisma.country.findMany();
   }
 
   async refreshCountries() {
@@ -64,7 +69,7 @@ export class CountriesService {
           name: country.name,
           capital: country.capital || null,
           region: country.region || null,
-          population: country.population || undefined,
+          population: country.population || 0,
           currency_code: country.currencies ? country.currencies[0].code : null,
           flag_url: country.flag || null,
         };
@@ -89,9 +94,10 @@ export class CountriesService {
 
         // update the metadata last_refreshed_at
         const now = new Date();
-        await prisma.metadata.update({
+        await prisma.metadata.upsert({
           where: { id: 1 },
-          data: { last_refreshed_at: now },
+          create: { last_refreshed_at: now },
+          update: { last_refreshed_at: now },
         });
       });
     } catch (error: any) {
@@ -99,6 +105,11 @@ export class CountriesService {
     }
 
     // now try generate an image summary for top five countries
+    try {
+      await this.imageService.generateCountrySummaryImage();
+    } catch (error: any) {
+      throw new Error(`Image generation failed: ${error.message}`);
+    }
 
     return { message: 'Countries refreshed successfully' };
   }
