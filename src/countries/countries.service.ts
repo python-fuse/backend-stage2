@@ -29,9 +29,9 @@ export class CountriesService {
     }
   }
 
-  getCountryByName(name: string) {
+  async getCountryByName(name: string) {
     const normalizedName = name.trim().toLowerCase();
-    const dbCountry = this.prisma.country.findFirst({
+    const dbCountry = await this.prisma.country.findFirst({
       where: {
         name: {
           equals: normalizedName,
@@ -45,6 +45,8 @@ export class CountriesService {
         details: `No country found with name: ${name}`,
       });
     }
+
+    return dbCountry;
   }
 
   async getCountriesWithFilters(filterParams?: {
@@ -110,12 +112,19 @@ export class CountriesService {
 
     // Handle fetching countries and exchange rates
     try {
-      const countriesApiResponse = await axios.get(this.countriesApiUrl!);
+      console.log('Fetching countries data...');
+      const countriesApiResponse = await axios.get(this.countriesApiUrl!, {
+        timeout: 30000,
+      });
       const countriesData = countriesApiResponse.data as CountryFromAPI[];
 
-      const allExchangeRatesResponse = await axios.get(this.ratesApiUrl!);
+      console.log('Fetching exchange rates...');
+      const allExchangeRatesResponse = await axios.get(this.ratesApiUrl!, {
+        timeout: 30000,
+      });
       const exchangeRatesData = allExchangeRatesResponse.data.rates;
 
+      console.log(`Processing ${countriesData.length} countries...`);
       for (const country of countriesData) {
         let newCountryEntry: any = {};
 
@@ -140,7 +149,7 @@ export class CountriesService {
 
         newCountryEntry = {
           ...newCountryEntry,
-          name: country.name,
+          name: country.name.toLowerCase(),
           capital: country.capital || null,
           region: country.region || null,
           population: country.population || 0,
@@ -151,18 +160,25 @@ export class CountriesService {
         allProcessedCountries.push(newCountryEntry);
       }
     } catch (error: any) {
+      console.error('Error fetching external data:', error.message);
       throw new ServiceUnavailableException({
         error: 'External data source unavailable',
-        details: `Could not fetch data from ${this.countriesApiUrl} or ${this.ratesApiUrl}`,
+        details: error.message,
       });
     }
 
     // Now update the database with processed countries as a batch
     try {
+      console.log('Starting database update...');
       const startTime = Date.now();
-      const chunkSize = 50;
+      const chunkSize = 25; // Reduced chunk size
+
       for (let i = 0; i < allProcessedCountries.length; i += chunkSize) {
         const chunk = allProcessedCountries.slice(i, i + chunkSize);
+        console.log(
+          `Processing chunk ${Math.floor(i / chunkSize) + 1}/${Math.ceil(allProcessedCountries.length / chunkSize)}`,
+        );
+
         const upsertPromises = chunk.map((country) =>
           this.prisma.country.upsert({
             where: { name: country.name },
@@ -171,9 +187,8 @@ export class CountriesService {
           }),
         );
 
-        await this.prisma.$transaction(() => Promise.all(upsertPromises), {
-          timeout: 10000,
-        });
+        // Fixed transaction syntax - pass array of promises directly
+        await this.prisma.$transaction(upsertPromises);
       }
 
       // Update metadata
@@ -188,27 +203,30 @@ export class CountriesService {
         `Database update completed in ${(endTime - startTime) / 1000} seconds`,
       );
     } catch (error: any) {
+      console.error('Database update error:', error);
       throw new InternalServerErrorException({
-        error: `Database update failed: ${error.message}`,
+        error: 'Database update failed',
+        details: error.message,
       });
     }
 
     // now try generate an image summary for top five countries
     try {
+      console.log('Generating image summary...');
       await this.imageService.generateCountrySummaryImage();
     } catch (error: any) {
-      throw new InternalServerErrorException({
-        error: `Image generation failed: ${error.message}`,
-      });
+      console.error('Image generation error:', error);
+      // Don't throw here - image generation failure shouldn't crash the whole operation
+      console.warn('Image generation failed but continuing...');
     }
 
     return { message: 'Countries refreshed successfully' };
   }
 
-  deleteCountryByName(name: string) {
+  async deleteCountryByName(name: string) {
     const normalizedName = name.trim().toLowerCase();
 
-    const dbCountry = this.prisma.country.findFirst({
+    const dbCountry = await this.prisma.country.findFirst({
       where: {
         name: {
           equals: normalizedName,
