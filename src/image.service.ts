@@ -1,11 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
-import { createCanvas, loadImage } from 'canvas';
+import { registerFont, createCanvas, loadImage } from 'canvas';
 import * as fs from 'fs';
+import path from 'path';
+import { cwd } from 'process';
 
 @Injectable()
 export class ImageService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) {
+    // Register a font (ensure the font file exists in the specified path)
+    const fontPath = path.join(cwd(), 'assets/fira.ttf');
+    registerFont(fontPath, { family: 'Fira' });
+  }
   async generateCountrySummaryImage() {
     // Total number of countries
     // Top 5 countries by estimated GDP
@@ -32,11 +38,11 @@ export class ImageService {
 
     // Title
     ctx.fillStyle = '#000000';
-    ctx.font = 'bold 24px Arial';
+    ctx.font = 'bold 24px Fira';
     ctx.fillText('Country Summary', 20, 40);
 
     // Total countries
-    ctx.font = '18px Arial';
+    ctx.font = '18px Fira';
     ctx.fillText(`Total Countries: ${totalCountries}`, 20, 80);
 
     // Top 5 countries by GDP
@@ -54,7 +60,7 @@ export class ImageService {
       }
 
       ctx.fillStyle = '#000000';
-      ctx.font = '16px Arial';
+      ctx.font = '16px Fira';
       ctx.fillText(
         `${i + 1}. ${country.name} - GDP: ${
           country.estimated_gdp
