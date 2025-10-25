@@ -6,13 +6,10 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from 'src/prisma.service';
-
+import { ImageService } from 'src/image.service';
 import axios from 'axios';
 import { CountryFromAPI } from 'src/utils/definitions';
-import { Country } from 'prisma/generated/client';
-import { CountryCreateInput } from 'prisma/generated/models';
 import { generateMultiplier } from 'src/utils';
-import { ImageService } from 'src/image.service';
 
 @Injectable()
 export class CountriesService {
@@ -109,7 +106,7 @@ export class CountriesService {
   }
 
   async refreshCountries() {
-    const allProcessedCountries: Country[] = [];
+    const allProcessedCountries: any[] = [];
 
     // Handle fetching countries and exchange rates
     try {
@@ -120,7 +117,7 @@ export class CountriesService {
       const exchangeRatesData = allExchangeRatesResponse.data.rates;
 
       for (const country of countriesData) {
-        let newCountryEntry: Partial<CountryCreateInput> = {};
+        let newCountryEntry: any = {};
 
         if (!country.currencies) {
           newCountryEntry.currency_code = null;
@@ -151,7 +148,7 @@ export class CountriesService {
           flag_url: country.flag || null,
         };
 
-        allProcessedCountries.push(newCountryEntry as Country);
+        allProcessedCountries.push(newCountryEntry);
       }
     } catch (error: any) {
       throw new ServiceUnavailableException({
