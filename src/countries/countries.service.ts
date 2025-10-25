@@ -149,7 +149,7 @@ export class CountriesService {
 
         newCountryEntry = {
           ...newCountryEntry,
-          name: country.name.toLowerCase(),
+          name: country.name,
           capital: country.capital || null,
           region: country.region || null,
           population: country.population || 0,
