@@ -1,0 +1,24 @@
+generator client {
+  provider = "prisma-client"
+  output   = "./generated"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Country {
+  id              Int      @id @default(autoincrement())
+  name            String
+  capital         String?
+  region          String?
+  population      BigInt
+  currency_code   String?
+  exchange_rate   Float?
+  flag_url        String?
+  estimated_gdp   Float?
+  last_refresh_at DateTime @default(now())
+
+  @@index([name])
+}
