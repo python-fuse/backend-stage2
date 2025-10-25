@@ -3,7 +3,9 @@ import {
   Delete,
   Get,
   NotFoundException,
+  Param,
   Post,
+  Query,
   StreamableFile,
 } from '@nestjs/common';
 import { CountriesService } from './countries.service';
@@ -19,23 +21,9 @@ export class CountriesController {
     return this.countriesService.refreshCountries();
   }
 
-  @Get()
-  async getCountries() {
-    const countries = await this.countriesService.getCountries();
-    return await JSON.parse(
-      JSON.stringify(countries, (_key, value) =>
-        typeof value === 'bigint' ? Number(value) : value,
-      ),
-    );
-  }
-
-  @Get(':name')
-  getCountryByName() {}
-
   @Get('image')
   getTopFiveCountriesImageSummary() {
     const imagePath = join(process.cwd(), 'cache/summary.png');
-    console.log(imagePath);
 
     if (!existsSync(imagePath)) {
       throw new NotFoundException({ error: 'Summary image not found' });
@@ -49,6 +37,31 @@ export class CountriesController {
     });
   }
 
+  @Get(':name')
+  getCountryByName(@Param('name') name: string) {
+    return this.countriesService.getCountryByName(name);
+  }
+
+  @Get()
+  async getCountries(
+    @Query('region') region?: string,
+    @Query('currency') currency?: string,
+    @Query('sort') sort?: string,
+  ) {
+    const countries = await this.countriesService.getCountriesWithFilters({
+      region,
+      currency,
+      sort,
+    });
+    return await JSON.parse(
+      JSON.stringify(countries, (_key, value) =>
+        typeof value === 'bigint' ? Number(value) : value,
+      ),
+    );
+  }
+
   @Delete(':name')
-  deleteCountryByName() {}
+  deleteCountryByName(@Param('name') name: string) {
+    return this.countriesService.deleteCountryByName(name);
+  }
 }

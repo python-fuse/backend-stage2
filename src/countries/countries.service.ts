@@ -1,4 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from 'src/prisma.service';
 
@@ -27,8 +32,70 @@ export class CountriesService {
     }
   }
 
+  getCountryByName(name: string) {
+    const normalizedName = name.trim().toLowerCase();
+    const dbCountry = this.prisma.country.findFirst({
+      where: {
+        name: {
+          equals: normalizedName,
+        },
+      },
+    });
+
+    if (!dbCountry) {
+      throw new NotFoundException({
+        error: 'Country not found',
+        details: `No country found with name: ${name}`,
+      });
+    }
+  }
+
+  async getCountriesWithFilters(filterParams?: {
+    region?: string;
+    currency?: string;
+    sort?: string;
+  }) {
+    const { region, currency, sort } = filterParams || {};
+
+    const whereClause: any = {};
+
+    if (region) {
+      whereClause.region = region;
+    }
+
+    if (currency) {
+      whereClause.currency_code = currency;
+    }
+
+    let orderByClause: any = {};
+    if (sort) {
+      const [field, direction] = sort.split('_');
+      orderByClause[field] = direction.toLowerCase();
+    }
+
+    const countries = await this.prisma.country.findMany({
+      where: whereClause,
+      orderBy: orderByClause,
+    });
+
+    return countries;
+  }
+
   getCountries() {
     return this.prisma.country.findMany();
+  }
+
+  async getStatusSummary() {
+    const totalCountries = await this.prisma.country.count();
+    const last_refreshed_at = await this.prisma.metadata.findUnique({
+      where: { id: 1 },
+      select: { last_refreshed_at: true },
+    });
+
+    return {
+      total_countries: totalCountries,
+      last_refreshed_at: last_refreshed_at?.last_refreshed_at || null,
+    };
   }
 
   async refreshCountries() {
@@ -77,7 +144,10 @@ export class CountriesService {
         allProcessedCountries.push(newCountryEntry as Country);
       }
     } catch (error: any) {
-      throw new Error(`Failed to refresh countries: ${error.message}`);
+      throw new ServiceUnavailableException({
+        error: 'External data source unavailable',
+        details: `Could not fetch data from ${this.countriesApiUrl} or ${this.ratesApiUrl}`,
+      });
     }
 
     // Now update the database with processed countries as a batch
@@ -101,16 +171,45 @@ export class CountriesService {
         });
       });
     } catch (error: any) {
-      throw new Error(`Database update failed: ${error.message}`);
+      throw new InternalServerErrorException({
+        error: `Database update failed: ${error.message}`,
+      });
     }
 
     // now try generate an image summary for top five countries
     try {
       await this.imageService.generateCountrySummaryImage();
     } catch (error: any) {
-      throw new Error(`Image generation failed: ${error.message}`);
+      throw new InternalServerErrorException({
+        error: `Image generation failed: ${error.message}`,
+      });
     }
 
     return { message: 'Countries refreshed successfully' };
+  }
+  deleteCountryByName(name: string) {
+    const normalizedName = name.trim().toLowerCase();
+
+    const dbCountry = this.prisma.country.findFirst({
+      where: {
+        name: {
+          equals: normalizedName,
+        },
+      },
+    });
+
+    if (!dbCountry) {
+      throw new NotFoundException({
+        error: 'Country not found',
+        details: `No country found with name: ${name}`,
+      });
+    }
+    return this.prisma.country.deleteMany({
+      where: {
+        name: {
+          equals: normalizedName,
+        },
+      },
+    });
   }
 }
