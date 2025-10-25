@@ -159,24 +159,30 @@ export class CountriesService {
 
     // Now update the database with processed countries as a batch
     try {
-      await this.prisma.$transaction(async (prisma) => {
-        // Insert new countries
-        for (const countryData of allProcessedCountries) {
-          await prisma.country.upsert({
-            where: { name: countryData.name },
-            update: { ...countryData },
-            create: { ...countryData },
-          });
-        }
+      await this.prisma.$transaction(
+        async (prisma) => {
+          // Insert new countries
+          for (const countryData of allProcessedCountries) {
+            await prisma.country.upsert({
+              where: { name: countryData.name },
+              update: { ...countryData },
+              create: { ...countryData },
+            });
+          }
 
-        // update the metadata last_refreshed_at
-        const now = new Date();
-        await prisma.metadata.upsert({
-          where: { id: 1 },
-          create: { last_refreshed_at: now },
-          update: { last_refreshed_at: now },
-        });
-      });
+          // update the metadata last_refreshed_at
+          const now = new Date();
+          await prisma.metadata.upsert({
+            where: { id: 1 },
+            create: { last_refreshed_at: now },
+            update: { last_refreshed_at: now },
+          });
+        },
+        {
+          timeout: 60000,
+          maxWait: 60000,
+        },
+      );
     } catch (error: any) {
       throw new InternalServerErrorException({
         error: `Database update failed: ${error.message}`,
@@ -194,6 +200,7 @@ export class CountriesService {
 
     return { message: 'Countries refreshed successfully' };
   }
+
   deleteCountryByName(name: string) {
     const normalizedName = name.trim().toLowerCase();
 
